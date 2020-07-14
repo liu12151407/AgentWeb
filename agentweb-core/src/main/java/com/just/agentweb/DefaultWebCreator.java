@@ -27,12 +27,13 @@ import android.view.ViewStub;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
+import static com.just.agentweb.AgentWebConfig.WEBVIEW_DEFAULT_TYPE;
+
 /**
  * @author cenxiaozhong
  * @since 1.0.0
  */
 public class DefaultWebCreator implements WebCreator {
-
     private Activity mActivity;
     private ViewGroup mViewGroup;
     private boolean mIsNeedDefaultProgress;
@@ -51,18 +52,20 @@ public class DefaultWebCreator implements WebCreator {
     private FrameLayout mFrameLayout = null;
     private View mTargetProgress;
     private static final String TAG = DefaultWebCreator.class.getSimpleName();
+    private int mWebViewType = WEBVIEW_DEFAULT_TYPE;
 
-	/**
-	 * 使用默认的进度条
-	 * @param activity
-	 * @param viewGroup
-	 * @param lp
-	 * @param index
-	 * @param color
-	 * @param mHeight
-	 * @param webView
-	 * @param webLayout
-	 */
+    /**
+     * 使用默认的进度条
+     *
+     * @param activity
+     * @param viewGroup
+     * @param lp
+     * @param index
+     * @param color
+     * @param mHeight
+     * @param webView
+     * @param webLayout
+     */
     protected DefaultWebCreator(@NonNull Activity activity,
                                 @Nullable ViewGroup viewGroup,
                                 ViewGroup.LayoutParams lp,
@@ -82,15 +85,16 @@ public class DefaultWebCreator implements WebCreator {
         this.mIWebLayout = webLayout;
     }
 
-	/**
-	 * 关闭进度条
-	 * @param activity
-	 * @param viewGroup
-	 * @param lp
-	 * @param index
-	 * @param webView
-	 * @param webLayout
-	 */
+    /**
+     * 关闭进度条
+     *
+     * @param activity
+     * @param viewGroup
+     * @param lp
+     * @param index
+     * @param webView
+     * @param webLayout
+     */
     protected DefaultWebCreator(@NonNull Activity activity, @Nullable ViewGroup viewGroup, ViewGroup.LayoutParams lp, int index, @Nullable WebView webView, IWebLayout webLayout) {
         this.mActivity = activity;
         this.mViewGroup = viewGroup;
@@ -103,6 +107,7 @@ public class DefaultWebCreator implements WebCreator {
 
     /**
      * 自定义Indicator
+     *
      * @param activity
      * @param viewGroup
      * @param lp
@@ -142,8 +147,6 @@ public class DefaultWebCreator implements WebCreator {
 
     @Override
     public DefaultWebCreator create() {
-
-
         if (mIsCreated) {
             return this;
         }
@@ -172,6 +175,10 @@ public class DefaultWebCreator implements WebCreator {
         return mFrameLayout;
     }
 
+    @Override
+    public int getWebViewType() {
+        return this.mWebViewType;
+    }
 
     private ViewGroup createLayout() {
         Activity mActivity = this.mActivity;
@@ -184,7 +191,7 @@ public class DefaultWebCreator implements WebCreator {
         mFrameLayout.bindWebView(this.mWebView);
         LogUtils.i(TAG, "  instanceof  AgentWebView:" + (this.mWebView instanceof AgentWebView));
         if (this.mWebView instanceof AgentWebView) {
-            AgentWebConfig.WEBVIEW_TYPE = AgentWebConfig.WEBVIEW_AGENTWEB_SAFE_TYPE;
+            this.mWebViewType = AgentWebConfig.WEBVIEW_AGENTWEB_SAFE_TYPE;
         }
         ViewStub mViewStub = new ViewStub(mActivity);
         mViewStub.setId(R.id.mainframe_error_viewsub_id);
@@ -208,7 +215,6 @@ public class DefaultWebCreator implements WebCreator {
             mProgressView.setVisibility(View.GONE);
         }
         return mFrameLayout;
-
     }
 
 
@@ -218,29 +224,25 @@ public class DefaultWebCreator implements WebCreator {
             mWebView = createWebView();
             mIWebLayout.getLayout().addView(mWebView, -1, -1);
             LogUtils.i(TAG, "add webview");
-
         } else {
-            AgentWebConfig.WEBVIEW_TYPE = AgentWebConfig.WEBVIEW_CUSTOM_TYPE;
+            this.mWebViewType = AgentWebConfig.WEBVIEW_CUSTOM_TYPE;
         }
         this.mWebView = mWebView;
         return mIWebLayout.getLayout();
-
     }
 
     private WebView createWebView() {
-
         WebView mWebView = null;
         if (this.mWebView != null) {
             mWebView = this.mWebView;
-            AgentWebConfig.WEBVIEW_TYPE = AgentWebConfig.WEBVIEW_CUSTOM_TYPE;
+            this.mWebViewType = AgentWebConfig.WEBVIEW_CUSTOM_TYPE;
         } else if (AgentWebConfig.IS_KITKAT_OR_BELOW_KITKAT) {
             mWebView = new AgentWebView(mActivity);
-            AgentWebConfig.WEBVIEW_TYPE = AgentWebConfig.WEBVIEW_AGENTWEB_SAFE_TYPE;
+            this.mWebViewType = AgentWebConfig.WEBVIEW_AGENTWEB_SAFE_TYPE;
         } else {
-            mWebView = new WebView(mActivity);
-            AgentWebConfig.WEBVIEW_TYPE = AgentWebConfig.WEBVIEW_DEFAULT_TYPE;
+            mWebView = new LollipopFixedWebView(mActivity);
+            this.mWebViewType = WEBVIEW_DEFAULT_TYPE;
         }
-
         return mWebView;
     }
 

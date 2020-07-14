@@ -30,12 +30,12 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
+
 /**
  * @author cenxiaozhong
  * @since 1.0.0
  */
 public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec {
-
     /**
      * 进度条颜色
      */
@@ -52,7 +52,6 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
      * 控件的宽度
      */
     private int mTargetWidth = 0;
-
     /**
      * 默认匀速动画最大的时长
      */
@@ -65,32 +64,30 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
      * 结束动画时长 ， Fade out 。
      */
     public static final int DO_END_ANIMATION_DURATION = 600;
-
     /**
      * 当前匀速动画最大的时长
      */
-    private static int CURRENT_MAX_UNIFORM_SPEED_DURATION = MAX_UNIFORM_SPEED_DURATION;
+    private int mCurrentMaxUniformSpeedDuration = MAX_UNIFORM_SPEED_DURATION;
     /**
      * 当前加速后减速动画最大时长
      */
-    private static int CURRENT_MAX_DECELERATE_SPEED_DURATION = MAX_DECELERATE_SPEED_DURATION;
-
+    private int mCurrentMaxDecelerateSpeedDuration = MAX_DECELERATE_SPEED_DURATION;
     /**
-     * 标志当前进度条的状态
+     * 结束动画时长
      */
-    private int TAG = 0;
+    private int mCurrentDoEndAnimationDuration = DO_END_ANIMATION_DURATION;
+    /**
+     * 当前进度条的状态
+     */
+    private int indicatorStatus = 0;
     public static final int UN_START = 0;
     public static final int STARTED = 1;
     public static final int FINISH = 2;
-
-    private float mTarget = 0f;
-
     private float mCurrentProgress = 0F;
-
     /**
      * 默认的高度
      */
-    public static int WEB_INDICATOR_DEFAULT_HEIGHT = 3;
+    public int mWebIndicatorDefaultHeight = 3;
 
     public WebIndicator(Context context) {
         this(context, null);
@@ -102,23 +99,18 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
 
     public WebIndicator(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-
         init(context, attrs, defStyleAttr);
-
     }
 
     private void init(Context context, AttributeSet attrs, int defStyleAttr) {
-
         mPaint = new Paint();
         mColor = Color.parseColor("#1aad19");
         mPaint.setAntiAlias(true);
         mPaint.setColor(mColor);
         mPaint.setDither(true);
         mPaint.setStrokeCap(Paint.Cap.SQUARE);
-
         mTargetWidth = context.getResources().getDisplayMetrics().widthPixels;
-        WEB_INDICATOR_DEFAULT_HEIGHT = AgentWebUtils.dp2px(context, 3);
-
+        mWebIndicatorDefaultHeight = AgentWebUtils.dp2px(context, 3);
     }
 
     public void setColor(int color) {
@@ -132,10 +124,8 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-
         int wMode = MeasureSpec.getMode(widthMeasureSpec);
         int w = MeasureSpec.getSize(widthMeasureSpec);
-
         int hMode = MeasureSpec.getMode(heightMeasureSpec);
         int h = MeasureSpec.getSize(heightMeasureSpec);
 
@@ -143,31 +133,28 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
             w = w <= getContext().getResources().getDisplayMetrics().widthPixels ? w : getContext().getResources().getDisplayMetrics().widthPixels;
         }
         if (hMode == MeasureSpec.AT_MOST) {
-            h = WEB_INDICATOR_DEFAULT_HEIGHT;
+            h = mWebIndicatorDefaultHeight;
         }
         this.setMeasuredDimension(w, h);
-
     }
 
 
     @Override
     protected void onDraw(Canvas canvas) {
-
     }
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
         canvas.drawRect(0, 0, mCurrentProgress / 100 * Float.valueOf(this.getWidth()), this.getHeight(), mPaint);
     }
+
     @Override
     public void show() {
-
         if (getVisibility() == View.GONE) {
             this.setVisibility(View.VISIBLE);
             mCurrentProgress = 0f;
             startAnim(false);
         }
-
     }
 
     @Override
@@ -176,90 +163,90 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
         this.mTargetWidth = getMeasuredWidth();
         int screenWidth = getContext().getResources().getDisplayMetrics().widthPixels;
         if (mTargetWidth >= screenWidth) {
-            CURRENT_MAX_DECELERATE_SPEED_DURATION = MAX_DECELERATE_SPEED_DURATION;
-            CURRENT_MAX_UNIFORM_SPEED_DURATION = MAX_UNIFORM_SPEED_DURATION;
+            mCurrentMaxDecelerateSpeedDuration = MAX_DECELERATE_SPEED_DURATION;
+            mCurrentMaxUniformSpeedDuration = MAX_UNIFORM_SPEED_DURATION;
+            mCurrentDoEndAnimationDuration = MAX_DECELERATE_SPEED_DURATION;
         } else {
             //取比值
             float rate = this.mTargetWidth / Float.valueOf(screenWidth);
-            CURRENT_MAX_UNIFORM_SPEED_DURATION = (int) (MAX_UNIFORM_SPEED_DURATION * rate);
-            CURRENT_MAX_DECELERATE_SPEED_DURATION = (int) (MAX_DECELERATE_SPEED_DURATION * rate);
+            mCurrentMaxUniformSpeedDuration = (int) (MAX_UNIFORM_SPEED_DURATION * rate);
+            mCurrentMaxDecelerateSpeedDuration = (int) (MAX_DECELERATE_SPEED_DURATION * rate);
+            mCurrentDoEndAnimationDuration = (int) (DO_END_ANIMATION_DURATION * rate);
 
         }
-
-        LogUtils.i("WebProgress", "CURRENT_MAX_UNIFORM_SPEED_DURATION" + CURRENT_MAX_UNIFORM_SPEED_DURATION);
+        LogUtils.i("WebProgress", "CURRENT_MAX_UNIFORM_SPEED_DURATION" + mCurrentMaxUniformSpeedDuration);
     }
 
     public void setProgress(float progress) {
         if (getVisibility() == View.GONE) {
             setVisibility(View.VISIBLE);
         }
-        if (progress < 95f){
+        if (progress < 95f) {
             return;
         }
-        if (TAG != FINISH) {
+        if (indicatorStatus != FINISH) {
             startAnim(true);
         }
     }
+
     @Override
     public void hide() {
-        TAG = FINISH;
+        indicatorStatus = FINISH;
     }
 
     private void startAnim(boolean isFinished) {
-
-
         float v = isFinished ? 100 : 95;
-
-
         if (mAnimator != null && mAnimator.isStarted()) {
             mAnimator.cancel();
         }
         mCurrentProgress = mCurrentProgress == 0f ? 0.00000001f : mCurrentProgress;
-
-        LogUtils.i("WebIndicator", "mCurrentProgress:" + mCurrentProgress + " v:" + v + "  :" + (1f - mCurrentProgress));
         if (!isFinished) {
-            ValueAnimator mAnimator = ValueAnimator.ofFloat(mCurrentProgress, v);
-            float residue = 1f - mCurrentProgress / 100 - 0.05f;
-            mAnimator.setInterpolator(new LinearInterpolator());
-            mAnimator.setDuration((long) (residue * CURRENT_MAX_UNIFORM_SPEED_DURATION));
-            mAnimator.addUpdateListener(mAnimatorUpdateListener);
-            mAnimator.start();
-            this.mAnimator = mAnimator;
-        } else {
+            AnimatorSet animatorSet = new AnimatorSet();
 
+            float p1 = v * 0.60f;
+            float p2 = v;
+            ValueAnimator animator = ValueAnimator.ofFloat(mCurrentProgress, p1);
+            ValueAnimator animator0 = ValueAnimator.ofFloat(p1, p2);
+            float residue = 1f - mCurrentProgress / 100 - 0.05f;
+            long duration = (long) (residue * mCurrentMaxUniformSpeedDuration);
+            long duration6 = (long) (duration * 0.6f);
+            long duration4 = (long) (duration * 0.4f);
+            animator.setInterpolator(new LinearInterpolator());
+            animator.setDuration(duration4);
+            animator.addUpdateListener(mAnimatorUpdateListener);
+
+            animator0.setInterpolator(new LinearInterpolator());
+            animator0.setDuration(duration6);
+            animator0.addUpdateListener(mAnimatorUpdateListener);
+            animatorSet.play(animator0).after(animator);
+            animatorSet.start();
+            this.mAnimator = animatorSet;
+        } else {
             ValueAnimator segment95Animator = null;
             if (mCurrentProgress < 95f) {
                 segment95Animator = ValueAnimator.ofFloat(mCurrentProgress, 95);
                 float residue = 1f - mCurrentProgress / 100f - 0.05f;
-                segment95Animator.setInterpolator(new LinearInterpolator());
-                segment95Animator.setDuration((long) (residue * CURRENT_MAX_DECELERATE_SPEED_DURATION));
+                segment95Animator.setDuration((long) (residue * mCurrentMaxDecelerateSpeedDuration));
                 segment95Animator.setInterpolator(new DecelerateInterpolator());
                 segment95Animator.addUpdateListener(mAnimatorUpdateListener);
             }
-
-
             ObjectAnimator mObjectAnimator = ObjectAnimator.ofFloat(this, "alpha", 1f, 0f);
-            mObjectAnimator.setDuration(DO_END_ANIMATION_DURATION);
+            mObjectAnimator.setDuration(mCurrentDoEndAnimationDuration);
             ValueAnimator mValueAnimatorEnd = ValueAnimator.ofFloat(95f, 100f);
-            mValueAnimatorEnd.setDuration(DO_END_ANIMATION_DURATION);
+            mValueAnimatorEnd.setDuration(mCurrentDoEndAnimationDuration);
             mValueAnimatorEnd.addUpdateListener(mAnimatorUpdateListener);
-
-            AnimatorSet mAnimatorSet = new AnimatorSet();
-            mAnimatorSet.playTogether(mObjectAnimator, mValueAnimatorEnd);
-
+            AnimatorSet animatorSet = new AnimatorSet();
+            animatorSet.playTogether(mObjectAnimator, mValueAnimatorEnd);
             if (segment95Animator != null) {
-                AnimatorSet mAnimatorSet1 = new AnimatorSet();
-                mAnimatorSet1.play(mAnimatorSet).after(segment95Animator);
-                mAnimatorSet = mAnimatorSet1;
+                AnimatorSet animatorSet0 = new AnimatorSet();
+                animatorSet0.play(animatorSet).after(segment95Animator);
+                animatorSet = animatorSet0;
             }
-            mAnimatorSet.addListener(mAnimatorListenerAdapter);
-            mAnimatorSet.start();
-            mAnimator = mAnimatorSet;
+            animatorSet.addListener(mAnimatorListenerAdapter);
+            animatorSet.start();
+            mAnimator = animatorSet;
         }
-
-        TAG = STARTED;
-        mTarget = v;
-
+        indicatorStatus = STARTED;
     }
 
     private ValueAnimator.AnimatorUpdateListener mAnimatorUpdateListener = new ValueAnimator.AnimatorUpdateListener() {
@@ -268,7 +255,6 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
             float t = (float) animation.getAnimatedValue();
             WebIndicator.this.mCurrentProgress = t;
             WebIndicator.this.invalidate();
-
         }
     };
 
@@ -282,7 +268,6 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-
         /**
          * animator cause leak , if not cancel;
          */
@@ -293,18 +278,18 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
     }
 
     private void doEnd() {
-        if (TAG == FINISH && mCurrentProgress == 100f) {
+        if (indicatorStatus == FINISH && mCurrentProgress == 100f) {
             setVisibility(GONE);
             mCurrentProgress = 0f;
             this.setAlpha(1f);
         }
-        TAG = UN_START;
+        indicatorStatus = UN_START;
     }
 
     @Override
     public void reset() {
         mCurrentProgress = 0;
-        if (mAnimator != null && mAnimator.isStarted()){
+        if (mAnimator != null && mAnimator.isStarted()) {
             mAnimator.cancel();
         }
     }
@@ -312,12 +297,11 @@ public class WebIndicator extends BaseIndicatorView implements BaseIndicatorSpec
     @Override
     public void setProgress(int newProgress) {
         setProgress(Float.valueOf(newProgress));
-
     }
 
 
     @Override
     public LayoutParams offerLayoutParams() {
-        return new LayoutParams(-1, WEB_INDICATOR_DEFAULT_HEIGHT);
+        return new LayoutParams(-1, mWebIndicatorDefaultHeight);
     }
 }

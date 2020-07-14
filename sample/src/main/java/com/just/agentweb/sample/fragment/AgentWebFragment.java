@@ -8,8 +8,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.net.http.SslError;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.PopupMenu;
 import android.text.TextUtils;
@@ -19,35 +22,36 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.WebChromeClient;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.download.library.DownloadImpl;
+import com.download.library.DownloadListenerAdapter;
+import com.download.library.Extra;
+import com.download.library.ResourceRequest;
 import com.google.gson.Gson;
 import com.just.agentweb.AbsAgentWebSettings;
 import com.just.agentweb.AgentWeb;
 import com.just.agentweb.AgentWebConfig;
+import com.just.agentweb.DefaultDownloadImpl;
 import com.just.agentweb.DefaultWebClient;
 import com.just.agentweb.IAgentWebSettings;
-import com.just.agentweb.LogUtils;
 import com.just.agentweb.MiddlewareWebChromeBase;
 import com.just.agentweb.MiddlewareWebClientBase;
 import com.just.agentweb.PermissionInterceptor;
+import com.just.agentweb.WebChromeClient;
 import com.just.agentweb.WebListenerManager;
-import com.just.agentweb.download.AgentWebDownloader;
-import com.just.agentweb.download.DefaultDownloadImpl;
-import com.just.agentweb.download.DownloadListenerAdapter;
-import com.just.agentweb.download.DownloadingService;
 import com.just.agentweb.sample.R;
 import com.just.agentweb.sample.client.MiddlewareChromeClient;
 import com.just.agentweb.sample.client.MiddlewareWebViewClient;
+import com.just.agentweb.sample.common.CommonWebChromeClient;
 import com.just.agentweb.sample.common.FragmentKeyDown;
 import com.just.agentweb.sample.common.UIController;
 
@@ -75,8 +79,6 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 	public static final String TAG = AgentWebFragment.class.getSimpleName();
 	private MiddlewareWebClientBase mMiddleWareWebClient;
 	private MiddlewareWebChromeBase mMiddleWareWebChrome;
-	private DownloadingService mDownloadingService;
-	private AgentWebDownloader.ExtraService mExtraService;
 
 	public static AgentWebFragment getInstance(Bundle bundle) {
 
@@ -106,17 +108,15 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 				.useDefaultIndicator(-1, 3)//设置进度条颜色与高度，-1为默认值，高度为2，单位为dp。
 				.setAgentWebWebSettings(getSettings())//设置 IAgentWebSettings。
 				.setWebViewClient(mWebViewClient)//WebViewClient ， 与 WebView 使用一致 ，但是请勿获取WebView调用setWebViewClient(xx)方法了,会覆盖AgentWeb DefaultWebClient,同时相应的中间件也会失效。
-				.setWebChromeClient(mWebChromeClient) //WebChromeClient
+				.setWebChromeClient(new CommonWebChromeClient()) //WebChromeClient
 				.setPermissionInterceptor(mPermissionInterceptor) //权限拦截 2.0.0 加入。
 				.setSecurityType(AgentWeb.SecurityType.STRICT_CHECK) //严格模式 Android 4.2.2 以下会放弃注入对象 ，使用AgentWebView没影响。
 				.setAgentWebUIController(new UIController(getActivity())) //自定义UI  AgentWeb3.0.0 加入。
 				.setMainFrameErrorView(R.layout.agentweb_error_page, -1) //参数1是错误显示的布局，参数2点击刷新控件ID -1表示点击整个布局都刷新， AgentWeb 3.0.0 加入。
 				.useMiddlewareWebChrome(getMiddlewareWebChrome()) //设置WebChromeClient中间件，支持多个WebChromeClient，AgentWeb 3.0.0 加入。
+				.additionalHttpHeader(getUrl(), "cookie", "41bc7ddf04a26b91803f6b11817a5a1c")
 				.useMiddlewareWebClient(getMiddlewareWebClient()) //设置WebViewClient中间件，支持多个WebViewClient， AgentWeb 3.0.0 加入。
-//                .setDownloadListener(mDownloadListener) 4.0.0 删除该API//下载回调
-//                .openParallelDownload()// 4.0.0删除该API 打开并行下载 , 默认串行下载。 请通过AgentWebDownloader#Extra实现并行下载
-//                .setNotifyIcon(R.drawable.ic_file_download_black_24dp) 4.0.0删除该api //下载通知图标。4.0.0后的版本请通过AgentWebDownloader#Extra修改icon
-				.setOpenOtherPageWays(DefaultWebClient.OpenOtherPageWays.DISALLOW)//打开其他页面时，弹窗质询用户前往其他应用 AgentWeb 3.0.0 加入。
+				.setOpenOtherPageWays(DefaultWebClient.OpenOtherPageWays.ASK)//打开其他页面时，弹窗质询用户前往其他应用 AgentWeb 3.0.0 加入。
 				.interceptUnkownUrl() //拦截找不到相关页面的Url AgentWeb 3.0.0 加入。
 				.createAgentWeb()//创建AgentWeb。
 				.ready()//设置 WebSettings。
@@ -128,18 +128,9 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 		initView(view);
 
 
-
-
-
-		// AgentWeb 4.0 开始，删除该类以及删除相关的API
-//        DefaultMsgConfig.DownloadMsgConfig mDownloadMsgConfig = mAgentWeb.getDefaultMsgConfig().getDownloadMsgConfig();
-		//  mDownloadMsgConfig.setCancel("放弃");  // 修改下载提示信息，这里可以语言切换
-
 		// AgentWeb 没有把WebView的功能全面覆盖 ，所以某些设置 AgentWeb 没有提供 ， 请从WebView方面入手设置。
 		mAgentWeb.getWebCreator().getWebView().setOverScrollMode(WebView.OVER_SCROLL_NEVER);
 		//mAgentWeb.getWebCreator().getWebView()  获取WebView .
-
-
 
 //		mAgentWeb.getWebCreator().getWebView().setOnLongClickListener();
 
@@ -164,95 +155,6 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 
 
 	/**
-	 * 更新于 AgentWeb  4.0.0
-	 */
-	protected DownloadListenerAdapter mDownloadListenerAdapter = new DownloadListenerAdapter() {
-
-		/**
-		 *
-		 * @param url                下载链接
-		 * @param userAgent          UserAgent
-		 * @param contentDisposition ContentDisposition
-		 * @param mimetype           资源的媒体类型
-		 * @param contentLength      文件长度
-		 * @param extra              下载配置 ， 用户可以通过 Extra 修改下载icon ， 关闭进度条 ， 是否强制下载。
-		 * @return true 表示用户处理了该下载事件 ， false 交给 AgentWeb 下载
-		 */
-		@Override
-		public boolean onStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength, AgentWebDownloader.Extra extra) {
-			LogUtils.i(TAG, "onStart:" + url);
-			extra.setOpenBreakPointDownload(true) // 是否开启断点续传
-					.setIcon(R.drawable.ic_file_download_black_24dp) //下载通知的icon
-					.setConnectTimeOut(6000) // 连接最大时长
-					.setBlockMaxTime(10 * 60 * 1000)  // 以8KB位单位，默认60s ，如果60s内无法从网络流中读满8KB数据，则抛出异常
-					.setDownloadTimeOut(Long.MAX_VALUE) // 下载最大时长
-					.setParallelDownload(false)  // 串行下载更节省资源哦
-					.setEnableIndicator(true)  // false 关闭进度通知
-					.addHeader("Cookie", "xx") // 自定义请求头
-					.setAutoOpen(true) // 下载完成自动打开
-					.setForceDownload(true); // 强制下载，不管网络网络类型
-			return false;
-		}
-
-		/**
-		 *
-		 * 不需要暂停或者停止下载该方法可以不必实现
-		 * @param url
-		 * @param downloadingService  用户可以通过 DownloadingService#shutdownNow 终止下载
-		 */
-		@Override
-		public void onBindService(String url, DownloadingService downloadingService) {
-			super.onBindService(url, downloadingService);
-			mDownloadingService = downloadingService;
-			LogUtils.i(TAG, "onBindService:" + url + "  DownloadingService:" + downloadingService);
-		}
-
-		/**
-		 * 回调onUnbindService方法，让用户释放掉 DownloadingService。
-		 * @param url
-		 * @param downloadingService
-		 */
-		@Override
-		public void onUnbindService(String url, DownloadingService downloadingService) {
-			super.onUnbindService(url, downloadingService);
-			mDownloadingService = null;
-			LogUtils.i(TAG, "onUnbindService:" + url);
-		}
-
-		/**
-		 *
-		 * @param url  下载链接
-		 * @param loaded  已经下载的长度
-		 * @param length    文件的总大小
-		 * @param usedTime   耗时 ，单位ms
-		 * 注意该方法回调在子线程 ，线程名 AsyncTask #XX 或者 AgentWeb # XX
-		 */
-		@Override
-		public void onProgress(String url, long loaded, long length, long usedTime) {
-			int mProgress = (int) ((loaded) / Float.valueOf(length) * 100);
-			LogUtils.i(TAG, "onProgress:" + mProgress);
-			super.onProgress(url, loaded, length, usedTime);
-		}
-
-		/**
-		 *
-		 * @param path 文件的绝对路径
-		 * @param url  下载地址
-		 * @param throwable    如果异常，返回给用户异常
-		 * @return true 表示用户处理了下载完成后续的事件 ，false 默认交给AgentWeb 处理
-		 */
-		@Override
-		public boolean onResult(String path, String url, Throwable throwable) {
-			if (null == throwable) { //下载成功
-				//do you work
-			} else {//下载失败
-
-			}
-			return false; // true  不会发出下载完成的通知 , 或者打开文件
-		}
-	};
-
-	/**
 	 * @return IAgentWebSettings
 	 */
 	public IAgentWebSettings getSettings() {
@@ -266,8 +168,8 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 
 			/**
 			 * AgentWeb 4.0.0 内部删除了 DownloadListener 监听 ，以及相关API ，将 Download 部分完全抽离出来独立一个库，
-			 * 如果你需要使用 AgentWeb Download 部分 ， 请依赖上 compile 'com.just.agentweb:download:4.0.0 ，
-			 * 如果你需要监听下载结果，请自定义 AgentWebSetting ， New 出 DefaultDownloadImpl，传入DownloadListenerAdapter
+			 * 如果你需要使用 AgentWeb Download 部分 ， 请依赖上 compile 'com.download.library:Downloader:4.1.1' ，
+			 * 如果你需要监听下载结果，请自定义 AgentWebSetting ， New 出 DefaultDownloadImpl
 			 * 实现进度或者结果监听，例如下面这个例子，如果你不需要监听进度，或者下载结果，下面 setDownloader 的例子可以忽略。
 			 * @param webView
 			 * @param downloadListener
@@ -276,12 +178,44 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			@Override
 			public WebListenerManager setDownloader(WebView webView, android.webkit.DownloadListener downloadListener) {
 				return super.setDownloader(webView,
-						DefaultDownloadImpl
-								.create((Activity) webView.getContext(),
-										webView,
-										mDownloadListenerAdapter,
-										mDownloadListenerAdapter,
-										this.mAgentWeb.getPermissionInterceptor()));
+						new DefaultDownloadImpl(getActivity(),
+								webView,
+								this.mAgentWeb.getPermissionInterceptor()) {
+
+							@Override
+							protected ResourceRequest createResourceRequest(String url) {
+								return DownloadImpl.getInstance()
+										.with(getActivity().getApplicationContext())
+										.url(url)
+										.quickProgress()
+										.addHeader("", "")
+										.setEnableIndicator(true)
+										.autoOpenIgnoreMD5()
+										.setRetry(5)
+										.setBlockMaxTime(100000L);
+							}
+
+							@Override
+							protected void taskEnqueue(ResourceRequest resourceRequest) {
+								resourceRequest.enqueue(new DownloadListenerAdapter() {
+									@Override
+									public void onStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength, Extra extra) {
+										super.onStart(url, userAgent, contentDisposition, mimetype, contentLength, extra);
+									}
+
+									@MainThread
+									@Override
+									public void onProgress(String url, long downloaded, long length, long usedTime) {
+										super.onProgress(url, downloaded, length, usedTime);
+									}
+
+									@Override
+									public boolean onResult(Throwable throwable, Uri path, String url, Extra extra) {
+										return super.onResult(throwable, path, url, extra);
+									}
+								});
+							}
+						});
 			}
 		};
 	}
@@ -298,10 +232,11 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			target = "http://www.jd.com/";
 		}
 
+//		return "http://ggzy.sqzwfw.gov.cn/WebBuilderDS/WebbuilderMIS/attach/downloadZtbAttach.jspx?attachGuid=af982055-3d76-4b00-b5ab-36dee1f90b11&appUrlFlag=sqztb&siteGuid=7eb5f7f1-9041-43ad-8e13-8fcb82ea831a";
 		return target;
 	}
 
-	protected WebChromeClient mWebChromeClient = new WebChromeClient() {
+	protected com.just.agentweb.WebChromeClient mWebChromeClient = new WebChromeClient() {
 		@Override
 		public void onProgressChanged(WebView view, int newProgress) {
 			//  super.onProgressChanged(view, newProgress);
@@ -319,8 +254,11 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			mTitleTextView.setText(title);
 		}
 	};
-
-	protected WebViewClient mWebViewClient = new WebViewClient() {
+	/**
+	 * 注意，重写WebViewClient的方法,super.xxx()请务必正确调用， 如果没有调用super.xxx(),则无法执行DefaultWebClient的方法
+	 * 可能会影响到AgentWeb自带提供的功能,尽可能调用super.xxx()来完成洋葱模型
+	 */
+	protected com.just.agentweb.WebViewClient mWebViewClient = new com.just.agentweb.WebViewClient() {
 
 		private HashMap<String, Long> timer = new HashMap<>();
 
@@ -329,9 +267,10 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			super.onReceivedError(view, request, error);
 		}
 
+		@RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 		@Override
 		public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-			return shouldOverrideUrlLoading(view, request.getUrl() + "");
+			return super.shouldOverrideUrlLoading(view, request);
 		}
 
 		@Nullable
@@ -346,22 +285,18 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 
 			Log.i(TAG, "view:" + new Gson().toJson(view.getHitTestResult()));
 			Log.i(TAG, "mWebViewClient shouldOverrideUrlLoading:" + url);
-			//intent:// scheme的处理 如果返回false ， 则交给 DefaultWebClient 处理 ， 默认会打开该Activity  ， 如果Activity不存在则跳到应用市场上去.  true 表示拦截
-			//例如优酷视频播放 ，intent://play?...package=com.youku.phone;end;
 			//优酷想唤起自己应用播放该视频 ， 下面拦截地址返回 true  则会在应用内 H5 播放 ，禁止优酷唤起播放该视频， 如果返回 false ， DefaultWebClient  会根据intent 协议处理 该地址 ， 首先匹配该应用存不存在 ，如果存在 ， 唤起该应用播放 ， 如果不存在 ， 则跳到应用市场下载该应用 .
 			if (url.startsWith("intent://") && url.contains("com.youku.phone")) {
 				return true;
 			}
 			/*else if (isAlipay(view, mUrl))   //1.2.5开始不用调用该方法了 ，只要引入支付宝sdk即可 ， DefaultWebClient 默认会处理相应url调起支付宝
 			    return true;*/
-
-
-			return false;
+			return super.shouldOverrideUrlLoading(view, url);
 		}
 
 		@Override
 		public void onPageStarted(WebView view, String url, Bitmap favicon) {
-
+			super.onPageStarted(view, url, favicon);
 			Log.i(TAG, "mUrl:" + url + " onPageStarted  target:" + getUrl());
 			timer.put(url, System.currentTimeMillis());
 			if (url.equals(getUrl())) {
@@ -369,7 +304,6 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			} else {
 				pageNavigator(View.VISIBLE);
 			}
-
 		}
 
 		@Override
@@ -396,6 +330,12 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			super.onReceivedHttpError(view, request, errorResponse);
 
 //			Log.i(TAG, "onReceivedHttpError:" + 3 + "  request:" + mGson.toJson(request) + "  errorResponse:" + mGson.toJson(errorResponse));
+		}
+
+		@Override
+		public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+			handler.proceed();
+			super.onReceivedSslError(view, handler, error);
 		}
 
 		@Override
@@ -477,8 +417,6 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 		Uri mUri = Uri.parse(targetUrl);
 		intent.setData(mUri);
 		startActivity(intent);
-
-
 	}
 
 
@@ -627,11 +565,11 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 			 */
 			@Override
 			public boolean shouldOverrideUrlLoading(WebView view, String url) {
-
-				if (url.startsWith("agentweb")) { // 拦截 url，不执行 DefaultWebClient#shouldOverrideUrlLoading
+				Log.e(TAG, "MiddlewareWebClientBase#shouldOverrideUrlLoading url:" + url);
+				/*if (url.startsWith("agentweb")) { // 拦截 url，不执行 DefaultWebClient#shouldOverrideUrlLoading
 					Log.i(TAG, "agentweb scheme ~");
 					return true;
-				}
+				}*/
 
 				if (super.shouldOverrideUrlLoading(view, url)) { // 执行 DefaultWebClient#shouldOverrideUrlLoading
 					return true;
@@ -642,6 +580,7 @@ public class AgentWebFragment extends Fragment implements FragmentKeyDown {
 
 			@Override
 			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+				Log.e(TAG, "MiddlewareWebClientBase#shouldOverrideUrlLoading request url:" + request.getUrl().toString());
 				return super.shouldOverrideUrlLoading(view, request);
 			}
 		};

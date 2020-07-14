@@ -15,16 +15,15 @@ public class CustomSettingsFragment extends AgentWebFragment {
     public static AgentWebFragment getInstance(Bundle bundle) {
 
         CustomSettingsFragment mCustomSettingsFragment = new CustomSettingsFragment();
-        if (bundle != null)
+        if (bundle != null){
             mCustomSettingsFragment.setArguments(bundle);
-
+        }
         return mCustomSettingsFragment;
 
     }
 
-
     @Override
     public IAgentWebSettings getSettings() {
-        return new CustomSettings();
+        return new CustomSettings(getActivity());
     }
 }
